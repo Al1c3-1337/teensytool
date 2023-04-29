@@ -136,7 +136,7 @@ public class Utils {
     }
 
     /**
-     * Read a continuous Intel-HEX file
+     * Read a linear (even non-continuous) Intel-HEX file
      *
      * @param filename Filename of Intel-HEX file
      * @param addrOut Start address as AtomicInteger
@@ -148,19 +148,29 @@ public class Utils {
         List<Byte> bytes = new ArrayList<>();
         int startAddress = 0;
         boolean addrRead = false;
+        int tmpAddr = 0;
+        int currentAddr = 0;
         readerloop: while(bf.ready()) {
             IntelHexRecord ihr = IntelHexRecordReader.readRecord(bf.readLine());
             switch (ihr.getRecordType()) {
                 case IntelHexRecord.EXTENDED_LINEAR_ADDRESS_RECORD_TYPE:
-                    startAddress |= ub(ihr.getData()[0]) << 24 | ub(ihr.getData()[1]) << 16;
+                    tmpAddr = ub(ihr.getData()[0]) << 24 | ub(ihr.getData()[1]) << 16;
                     break;
                 case IntelHexRecord.DATA_RECORD_TYPE:
                     if (!addrRead) {
-                        startAddress |= ihr.getLoadOffset();
+                        startAddress = tmpAddr | ihr.getLoadOffset();
+                        currentAddr = startAddress;
                         addrRead = true;
+                    }
+                    if (currentAddr < (tmpAddr | ihr.getLoadOffset())) {
+                        while (currentAddr < (tmpAddr | ihr.getLoadOffset())) {
+                            bytes.add((byte)0x00); //TODO: check filler byte
+                            currentAddr++;
+                        }
                     }
                     for (byte b : ihr.getData()) {
                         bytes.add(b);
+                        currentAddr++;
                     }
                     break;
                 case IntelHexRecord.END_OF_FILE_RECORD_TYPE:
